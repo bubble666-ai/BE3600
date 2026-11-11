@@ -192,7 +192,35 @@ planned for a later release.
 or rely on a clean factory flash. Also note `fstools` does **not** format an
 empty extroot volume — pre-format it as in step 3.
 
-## Upgrades
+## Extra storage: `/opt` on the second NAND slot (42 MB, SSH-only)
+
+No re-flash, no U-Boot / no env change needed. Requires that both UBI
+devices are attached (the v30 dual-boot `bargs` does this). All you need is
+SSH on the freshly installed system:
+
+```sh
+# one-time, as root:
+IDX=$(grep '"rootfs_1"' /proc/mtd | sed 's/mtd\([0-9]*\):.*/\1/')
+ubiattach -m "$IDX" || true
+ubirmvol /dev/ubi1 -N kernel 2>/dev/null || true
+ubirmvol /dev/ubi1 -N ubi_rootfs 2>/dev/null || true
+ubirmvol /dev/ubi1 -N rootfs_data 2>/dev/null || true
+ubimkvol /dev/ubi1 -N bigdata -m          # ~47 MB volume (keep name unique!)
+# make a minimal UBIFS image on your PC and push it:
+#   mkfs.ubifs -r emptydir -m 2048 -e 126976 -c 393 -o data.ubifs
+#   ssh root@192.168.8.1 "cat > /tmp/data.ubifs" < data.ubifs
+#   ssh root@192.168.8.1 "ubiupdatevol /dev/ubi1_0 /tmp/data.ubifs"
+mkdir -p /opt
+mount -t ubifs /dev/ubi1_0 /opt
+df -h /opt        # ~42 MB free
+```
+
+Persist it with `/etc/init.d/opt` (`START=97`, `boot()` runs
+`ubiattach -m 19` + mount) and add `/opt/bin` to `PATH` in `/etc/profile`.
+This gives ~42 MB of persistent space next to the ~27 MB overlay — useful
+for large binaries/datasets (Xray, sing-box, scripts), while `apk` packages
+themselves still install to `/usr` on the overlay.
+
 
 LuCI → *System → Backup / Flash Firmware* → upload `*sysupgrade.bin` →
 *(Keep settings recommended; the extroot overlay survives either way)* →
