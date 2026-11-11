@@ -234,6 +234,29 @@ It refuses system roots, merges on re-run (after apk upgrades recreate the
 dir, just run it again), and prints both `df` sizes afterwards.
 
 
+## ⚠️ Package compatibility warning (read before `apk add`)
+
+This image is assembled from a **pinned userspace** (snapshot r27648 rootfs)
+on a custom kernel. Installing packages that replace *core* components pulls
+newer snapshot dependencies and will break the system (observed in the field:
+`wpad-mesh-*` replaced `wpad-basic-mbedtls` + `libucode` + `/usr/libexec/*`
+and killed LuCI and console login):
+
+* **Do not install/upgrade:** `wpad-*`, `hostapd*`, `ucode*`, `libucode*`,
+  `luci*`, `libc`, `libubox*`, `libubus*`, `netifd*`, `base-files` — i.e.
+  anything from the snapshot feeds that overrides a shipped core file.
+* **Safe:** pure-leaf packages that only add their own files (`htop`, `nano`,
+  `curl`, `tcpdump`, `python3-*`, `xray-core`, `sing-box`, …) as long as
+  `apk` does not offer `lib*` upgrades — if it does, stop.
+* **Recovery if it happens anyway:** boot U-Boot with `init=/bin/sh`, mount
+  `ubi0_2` and delete the offending files from `upper/` (they shadow the ROM
+  copies; system returns to its shipped state).
+
+**Roadmap (v31):** rebuild as a proper image from the OpenWrt ImageBuilder
+with a matching feed snapshot so `apk` upgrades stay compatible.
+
+## Upgrades
+
 LuCI → *System → Backup / Flash Firmware* → upload `*sysupgrade.bin` →
 *(Keep settings recommended; the extroot overlay survives either way)* →
 **Proceed**. Upgrading from any v26+ image is safe: root is mounted from
