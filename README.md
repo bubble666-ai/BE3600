@@ -23,23 +23,27 @@ the stock D-Link QSDK firmware. Read **Known Issues** before flashing.
 | **UART** | 115200 8N1, 3.3 V TTL, prompt `IPQ5332#` (U-Boot 2016.01) |
 | **Power** | 12 V / 1.5 A |
 
-## What's new in v30
+## Features
 
-* **Dual-boot ready:** FIT config renamed to `config@openwrt` (old
-  `config@mi04.1` kept as alias). With the documented two-entry U-Boot
-  `bootcmd`, flashing stock firmware from the vendor recovery page boots
-  stock automatically (`#config@mi04.1` + stock bootargs) and flashing the
-  OpenWrt factory image returns to OpenWrt — **no UART needed** either way.
-* **Default LAN IP = `192.168.8.1`** baked into the image (was
-  `192.168.50.1`).
-* `apk update` fixed for apk-tools 3.x: the image now ships
-  `/etc/apk/world` (generated from the installed-package database) and
-  `/lib/apk/db/triggers`. Without `world`, apk 3.0.5 aborts with
-  `Unable to read database: No such file or directory` before touching the
-  network — the exact failure users hit from LuCI / `apk update` on v28.
-* Inherited from v28: 5 GHz radio pinned to **ch40 / EHT40** (deterministic
-  AP+STA coexistence on the single QCN6432 radio), status LED re-checked
-  every 30 s, `wifi_autoup` removed.
+* **Dual-boot ready:** the FIT carries `config@openwrt` (alias
+  `config@mi04.1` for stock). With the two-entry U-Boot `bootcmd` below,
+  flashing stock from the vendor recovery page boots stock automatically
+  and flashing the OpenWrt factory image returns to OpenWrt — **no UART
+  needed** either way.
+* **DSA VLAN-unaware FDB-learning fix**
+  (`9991-net-dsa-yt921x-fix-unaware-fdb-host-learning.patch`); LAN1–4
+  switch fully functional.
+* **ubiblock rootfs** (`root=/dev/ubiblock0_1`) — eliminates the historical
+  `EBUSY` sysupgrade failure; `apk update` works (ships `/etc/apk/world`
+  and `/lib/apk/db/triggers` for apk-tools 3.x).
+* **Wi-Fi 7:** 2.4 GHz and 5 GHz EHT40, WPA3-SAE-mixed + PMF. 5 GHz pinned
+  to **ch40 / EHT40** (non-DFS) for deterministic AP+STA coexistence on the
+  single QCN6432 radio.
+* **Status LED:** welcoming animation (red → blue → green → status),
+  internet self-check every 30 s — green = default route, red = none.
+* `wwan` zone with masquerading pre-set for repeater mode; apk feeds for
+  `aarch64_cortex-a53`; LuCI thermal widget (5 zones); default LAN
+  `192.168.8.1`.
 
 ### U-Boot bootargs gotcha (important for manual work)
 
@@ -67,29 +71,6 @@ setenv bargs 'console=ttyMSM0,115200n8 earlycon ubi.mtd=rootfs ubi.block=0,1 roo
 setenv bootargs 'console=ttyMSM0,115200n8 earlycon ubi.mtd=rootfs ubi.block=0,1 root=/dev/ubiblock0_1 rootfstype=squashfs clk_ignore_unused'
 saveenv
 ```
-
-## What's new in v28
-
-* **5 GHz radio pinned to channel 40 / EHT40 (non-DFS).** Auto channel
-  selection on the QCN6432 could leave the 5 GHz AP without a beacon when a
-  second virtual interface (repeater STA) competes for the same radio.
-  A fixed non-DFS channel makes AP+STA coexistence deterministic.
-* **Internet LED now self-checking:** besides interface hotplug events, the
-  status LED is re-evaluated every 30 s — green = default route present,
-  red = no internet — so the LED recovers without a reboot.
-* **`wifi_autoup` service removed.** It rewrote the Wi-Fi SSID at every boot
-  and silently reverted user changes made from LuCI.
-* Inherited from v27: **DSA VLAN-unaware FDB-learning fix**
-  (`9991-net-dsa-yt921x-fix-unaware-fdb-host-learning.patch`), **ubiblock
-  rootfs** (`root=/dev/ubiblock0_1`, eliminates the historical `EBUSY`
-  sysupgrade failure), Wi-Fi 7 (2.4 GHz EHT40 WPA3-SAE-mixed + PMF, 5 GHz
-  EHT40 WPA3-SAE-mixed + PMF), welcoming LED animation (red → blue → green →
-  status), `wwan` zone with masquerading pre-set for repeater mode, apk
-  feeds for `aarch64_cortex-a53`, LuCI thermal widget (5 zones).
-
-**Upgrade path verified in the field:** v26 → v28 → v30 via
-*System → Backup / Flash Firmware* with *Keep settings* — rootfs volumes
-rebuilt cleanly, 42 MB extroot overlay and all settings survived.
 
 ## Files
 
