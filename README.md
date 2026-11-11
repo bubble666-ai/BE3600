@@ -221,6 +221,18 @@ This gives ~42 MB of persistent space next to the ~27 MB overlay — useful
 for large binaries/datasets (Xray, sing-box, scripts), while `apk` packages
 themselves still install to `/usr` on the overlay.
 
+**`optify` helper (the "tie both spaces together" trick):** a tiny script
+at `/opt/bin/optify` relocates any directory's contents onto the 42 MB
+volume and leaves a symlink behind, so both spaces act as one pool:
+
+```sh
+optify /usr/share/xray-core      # moves contents to /opt/share_usr_share_xray-core
+optify /root/.cache
+```
+
+It refuses system roots, merges on re-run (after apk upgrades recreate the
+dir, just run it again), and prints both `df` sizes afterwards.
+
 
 LuCI → *System → Backup / Flash Firmware* → upload `*sysupgrade.bin` →
 *(Keep settings recommended; the extroot overlay survives either way)* →
