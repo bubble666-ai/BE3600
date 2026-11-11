@@ -304,9 +304,8 @@ inside the image is `24.10-SNAPSHOT r27648 (DIR-BE364K Community Edition v30)`.
 * Motorcomm YT9215 DSA driver — David Yang (`mmyangfl`) and upstream DSA
   maintainers; FDB-learning fix from the RD15/BE3600 community port.
 * Device tree, packaging and testing: DIR-BE364K community.
-* **Project code, build scripts, device-tree sources and documentation:
-  MIT** (see `LICENSE`).
-* **Firmware images** bundle OpenWrt and the Linux kernel, which are
-  **GPL-2.0**: complete corresponding sources are the upstream OpenWrt tree
-  plus the `patches/` and build scripts shipped in this repository
-  (GPL-2.0 compliance statement).
+* **License: GPL-2.0-only** (see `LICENSE`). This project is a derivative
+  work of OpenWrt and the Linux kernel; all build scripts, device-tree
+  sources and patches in this repository are released under the same terms.
+  Firmware images bundle GPL-2.0 components; complete corresponding sources
+  are the upstream OpenWrt tree plus everything shipped in this repository.
