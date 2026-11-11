@@ -1,0 +1,4 @@
+8f5a70a58492e6b8d43277b422a65ff9c0e943485e779b32c99cb43192adddc1 *firmware/openwrt-24.10-r27648-qualcommbe-ipq53xx-dlink_dir-be364k-v30-squashfs-factory.bin
+9d51600f4f315a8ac102634ac99b5e0c514353f3bedb013d86287a684d299afe *firmware/openwrt-24.10-r27648-qualcommbe-ipq53xx-dlink_dir-be364k-v30-squashfs-sysupgrade.bin
+90ec5fde9d76a92b90c9c791928c1d10c30d4290add09ab822618014c0ef3c19 *firmware/v30.itb
+c75546f3403894746e3e744f71ad0a9f13dc19ac82cd98aa7f316bbf810635dc *firmware/v30_ubi.bin

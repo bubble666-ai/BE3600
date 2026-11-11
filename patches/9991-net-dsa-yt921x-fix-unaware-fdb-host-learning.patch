@@ -1,0 +1,75 @@
+Subject: net: dsa: yt921x: correct VLAN-unaware host FDB learning
+
+The bridge uses VID 0 while VLAN-unaware ports learn in internal VID 4095.
+Map unicast FDB add/delete to the hardware FID, preserve all 32 bits during
+entry updates, and take over dynamically learned entries without retaining
+the stale egress port as a permanent static member. Leave MDB forwarding
+and STP unchanged.
+
+RD15 bench reproduction, observations and qualification limits:
+relatorios/be3600_dhcp_5ghz_retomada_2026-10-18.md
+
+--- a/drivers/net/dsa/yt921x.c
++++ b/drivers/net/dsa/yt921x.c
+@@ -1353,8 +1353,8 @@
+ }
+ 
+ static int
+-yt921x_fdb_add_index_in12(struct yt921x_priv *priv, u16 index, u16 ctrl1,
+-			  u16 ctrl2)
++yt921x_fdb_add_index_in12(struct yt921x_priv *priv, u16 index, u32 ctrl1,
++			  u32 ctrl2)
+ {
+ 	u32 ctrl;
+ 	u32 val;
+@@ -1473,7 +1473,14 @@
+ 
+ 	ctrl1 = val1 & ~YT921X_FDB_IO1_STATUS_M;
+ 	ctrl1 |= YT921X_FDB_IO1_STATUS_STATIC;
+-	ctrl2 = val2 | YT921X_FDB_IO2_EGR_PORTS(ports_mask);
++	/* Take over learned entries instead of merging into them; otherwise
++	 * the learned (possibly stale) port would be left behind as a static
++	 * entry once we leave
++	 */
++	if ((val1 & YT921X_FDB_IO1_STATUS_M) == YT921X_FDB_IO1_STATUS_STATIC)
++		ctrl2 = val2 | YT921X_FDB_IO2_EGR_PORTS(ports_mask);
++	else
++		ctrl2 = YT921X_FDB_IO2_EGR_PORTS(ports_mask);
+ 	if (ctrl1 == val1 && ctrl2 == val2)
+ 		return 0;
+ 
+@@ -1529,6 +1536,16 @@
+ 	return res;
+ }
+ 
++/* The bridge uses VID 0 for VLAN-unaware entries, but VLAN-unaware ports learn
++ * and look up in YT921X_VID_UNWARE (their PVID), so host entries would never
++ * match. Translate regardless of vlan_filtering so that add and del always
++ * agree; VID 0 is never matched in VLAN-aware mode anyway.
++ */
++static u16 yt921x_fdb_vid(u16 vid)
++{
++	return vid ? vid : YT921X_VID_UNWARE;
++}
++
+ static int
+ yt921x_dsa_port_fdb_del(struct dsa_switch *ds, int port,
+ 			const unsigned char *addr, u16 vid, struct dsa_db db)
+@@ -1537,7 +1554,7 @@
+ 	int res;
+ 
+ 	mutex_lock(&priv->reg_lock);
+-	res = yt921x_fdb_leave(priv, addr, vid, BIT(port));
++	res = yt921x_fdb_leave(priv, addr, yt921x_fdb_vid(vid), BIT(port));
+ 	mutex_unlock(&priv->reg_lock);
+ 
+ 	return res;
+@@ -1551,7 +1568,7 @@
+ 	int res;
+ 
+ 	mutex_lock(&priv->reg_lock);
+-	res = yt921x_fdb_join(priv, addr, vid, BIT(port));
++	res = yt921x_fdb_join(priv, addr, yt921x_fdb_vid(vid), BIT(port));
+ 	mutex_unlock(&priv->reg_lock);
+ 
+ 	return res;
