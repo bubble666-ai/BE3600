@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Fully Automated TFTP + UART Flashing Engine for DIR-BE364K (OpenWrt v30)
+Fully Automated TFTP + UART Flashing Engine for DIR-BE364K (OpenWrt v31)
 """
+import argparse
 import os
 import sys
 import time
@@ -12,9 +13,17 @@ import serial
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-ROOT = r"E:\DIR_BE364K\openwrt-port"
-IMAGE_NAME = "v30_ubi.bin"
-IMAGE_PATH = os.path.join(ROOT, IMAGE_NAME)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_ROOT = os.path.join(REPO_ROOT, "firmware")
+
+parser = argparse.ArgumentParser(description="Automated UART + TFTP flasher for DIR-BE364K (v31)")
+parser.add_argument("--port", default="COM3", help="Serial COM port (default: COM3)")
+parser.add_argument("--image", default=os.path.join(DEFAULT_ROOT, "v31_ubi.bin"), help="Path to v31_ubi.bin")
+args = parser.parse_args()
+
+IMAGE_PATH = os.path.abspath(args.image)
+ROOT = os.path.dirname(IMAGE_PATH)
+IMAGE_NAME = os.path.basename(IMAGE_PATH)
 
 if not os.path.isfile(IMAGE_PATH):
     print(f"[ERROR] Image not found: {IMAGE_PATH}")
@@ -25,7 +34,7 @@ HEX_SIZE = f"0x{IMAGE_SIZE:x}"
 print(f"[*] Target Image: {IMAGE_NAME} ({IMAGE_SIZE} bytes / {HEX_SIZE})")
 
 PORT = 69
-COM_PORT = "COM3"
+COM_PORT = args.port
 BAUDRATE = 115200
 
 ROUTER_IP = "192.168.10.10"
@@ -50,21 +59,21 @@ def do_transfer(sock, addr, filename, blksize):
     size = os.path.getsize(path)
     total_blocks = (size + blksize - 1) // blksize
     print(f"\n[tftp] Starting stream: {filename} ({size} bytes, {total_blocks} blocks of {blksize}) to {addr}", flush=True)
-    
+
     with open(path, 'rb') as f:
         data = f.read()
-        
+
     block = 1
     t0 = time.time()
     try:
         while True:
             chunk = data[(block-1)*blksize : block*blksize]
             pkt = bytes([0, 3]) + (block & 0xFFFF).to_bytes(2, 'big') + chunk
-            
+
             ack_ok = False
             for retry in range(10):
                 sock.sendto(pkt, addr)
-                time.sleep(0.0003) # 0.3ms pacing
+                time.sleep(0.0003)
                 try:
                     while True:
                         ack, peer = sock.recvfrom(1024)
@@ -83,18 +92,18 @@ def do_transfer(sock, addr, filename, blksize):
                     pass
                 if ack_ok:
                     break
-                    
+
             if not ack_ok:
                 print(f"\n[tftp] FAILED at block {block}", flush=True)
                 break
-                
+
             if block % 1000 == 0 or block == total_blocks:
                 pct = (block / total_blocks) * 100
                 mb = (block * blksize) / (1024 * 1024)
                 el = time.time() - t0
                 spd = mb / el if el > 0 else 0
                 print(f"[tftp] Progress: {block}/{total_blocks} ({pct:.1f}%) [{mb:.2f} MB, {spd:.2f} MB/s]", flush=True)
-                
+
             if len(chunk) < blksize:
                 el = time.time() - t0
                 spd = (size / 1024 / 1024) / el if el > 0 else 0
@@ -123,13 +132,13 @@ def handle_rrq(req, addr):
             except:
                 pass
         i += 2
-        
+
     print(f"\n[tftp] Incoming RRQ for '{filename}' from {addr} (blksize={blksize})", flush=True)
-    
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     fix_win(sock)
     sock.settimeout(3.0)
-    
+
     cur_addr = addr
     if blksize != 512:
         oack = bytes([0, 6]) + b'blksize\x00' + str(blksize).encode() + b'\x00'
@@ -170,19 +179,17 @@ def main():
     ser = serial.Serial(COM_PORT, BAUDRATE, timeout=0.05)
     print(f"[*] Serial {COM_PORT} opened.")
 
-    # Interrupt and ensure prompt
     for _ in range(3):
         ser.write(b"\x03\r\n")
         time.sleep(0.1)
     while ser.read(4096): pass
 
-    # Setup environment in U-Boot
     print("[*] Configuring U-Boot parameters...")
     cmds = [
         f"setenv ipaddr {ROUTER_IP}\n",
         f"setenv serverip {SERVER_IP}\n",
         f"setenv netmask {NETMASK}\n",
-        "setenv tftpblocksize\n",   # dynamic blksize negotiation
+        "setenv tftpblocksize\n",
         "setenv tftptimeout 10000\n",
         "setenv netretry yes\n"
     ]
@@ -191,7 +198,6 @@ def main():
         time.sleep(0.15)
         while ser.read(4096): pass
 
-    # Trigger TFTP
     print(f"\n[*] Triggering 'tftpboot 0x44000000 {IMAGE_NAME}'...")
     ser.write(f"tftpboot 0x44000000 {IMAGE_NAME}\n".encode())
 
@@ -220,10 +226,9 @@ def main():
     print("==================================================================\n")
     time.sleep(1.0)
 
-    # Flash rootfs
     print(f"[*] STEP 1/3: Flashing rootfs partition ({HEX_SIZE} bytes)...")
     ser.write(f"flash rootfs 0x44000000 {HEX_SIZE}\n".encode())
-    
+
     t_fl = time.time()
     fl_buf = ""
     while time.time() - t_fl < 180:
@@ -240,7 +245,6 @@ def main():
     print("\n[*] Rootfs partition flashed successfully!")
     time.sleep(1.0)
 
-    # Flash rootfs_1 for dual-slot consistency
     print(f"\n[*] STEP 2/3: Flashing rootfs_1 partition (secondary slot mirror)...")
     ser.write(f"flash rootfs_1 0x44000000 {HEX_SIZE}\n".encode())
     t_fl = time.time()
@@ -257,7 +261,7 @@ def main():
         time.sleep(0.1)
 
     time.sleep(1.0)
-    print("\n[*] STEP 3/3: Setting permanent OpenWrt v30 boot environment variables...")
+    print("\n[*] STEP 3/3: Setting permanent OpenWrt v31 boot environment variables...")
     env_cmds = [
         'setenv bargs "console=ttyMSM0,115200n8 earlycon ubi.mtd=rootfs ubi.block=0,1 root=/dev/ubiblock0_1 rootfstype=squashfs clk_ignore_unused"\n',
         'setenv bootargs "console=ttyMSM0,115200n8 earlycon ubi.mtd=rootfs ubi.block=0,1 root=/dev/ubiblock0_1 rootfstype=squashfs clk_ignore_unused"\n',
@@ -276,28 +280,25 @@ def main():
 
     time.sleep(1.0)
     print("\n==================================================================")
-    print("[*] RESETTING ROUTER INTO PERMANENT OPENWRT V30...")
+    print("[*] RESETTING ROUTER INTO PERMANENT OPENWRT V31...")
     print("==================================================================\n", flush=True)
     ser.write(b"reset\n")
 
     t_boot = time.time()
     boot_log = ""
-    with open(r"E:\DIR_BE364K\openwrt-port\boot_v30_final_success.txt", "w", encoding="utf-8") as f_out:
-        while time.time() - t_boot < 150:
-            chunk = ser.read(ser.in_waiting or 1)
-            if chunk:
-                text = chunk.decode('utf-8', 'replace')
-                sys.stdout.write(text)
-                sys.stdout.flush()
-                f_out.write(text)
-                f_out.flush()
-                boot_log += text
-                if "procd: - init complete -" in boot_log or "Please press Enter to activate this console" in boot_log:
-                    print("\n\n==================================================================")
-                    print(">>> OPENWRT V30 BOOT SUCCESS FROM NAND CONFIRMED! <<<")
-                    print("==================================================================")
-                    break
-            time.sleep(0.02)
+    while time.time() - t_boot < 150:
+        chunk = ser.read(ser.in_waiting or 1)
+        if chunk:
+            text = chunk.decode('utf-8', 'replace')
+            sys.stdout.write(text)
+            sys.stdout.flush()
+            boot_log += text
+            if "procd: - init complete -" in boot_log or "Please press Enter to activate this console" in boot_log:
+                print("\n\n==================================================================")
+                print(">>> OPENWRT V31 BOOT SUCCESS FROM NAND CONFIRMED! <<<")
+                print("==================================================================")
+                break
+        time.sleep(0.02)
 
     ser.close()
     print("\n[*] Script execution completed.")

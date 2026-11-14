@@ -1,17 +1,17 @@
-Subject: net: dsa: yt921x: correct VLAN-unaware host FDB learning
+From: OpenWrt Builder <builder@openwrt.org>
+Subject: [PATCH] net: dsa: yt921x: fix FDB/MDB vid handling and 32-bit register truncation
 
-The bridge uses VID 0 while VLAN-unaware ports learn in internal VID 4095.
-Map unicast FDB add/delete to the hardware FID, preserve all 32 bits during
-entry updates, and take over dynamically learned entries without retaining
-the stale egress port as a permanent static member. Leave MDB forwarding
-and STP unchanged.
-
-RD15 bench reproduction, observations and qualification limits:
-relatorios/be3600_dhcp_5ghz_retomada_2026-10-18.md
+1. yt921x_fdb_add_index_in12() took u16 ctrl1, u16 ctrl2, truncating the upper
+   16 bits (including YT921X_FDB_IO1_STATUS_M, YT921X_FDB_IO1_FID_M, and
+   YT921X_FDB_IO2_EGR_PORTS_M) whenever an existing FDB/MDB entry was updated.
+   Change ctrl1 and ctrl2 parameters to u32.
+2. When bridge VLAN filtering is disabled, DSA passes vid=0 to port_fdb_add/del
+   and port_mdb_add/del, whereas YT9215 hardware learning uses YT921X_VID_UNWARE
+   (4095). Map vid=0 to YT921X_VID_UNWARE via yt921x_fdb_vid(vid).
 
 --- a/drivers/net/dsa/yt921x.c
 +++ b/drivers/net/dsa/yt921x.c
-@@ -1353,8 +1353,8 @@
+@@ -2978,8 +2978,8 @@ static int yt921x_fdb_wait(struct yt921x_priv *priv, u32 *valp)
  }
  
  static int
@@ -22,31 +22,10 @@ relatorios/be3600_dhcp_5ghz_retomada_2026-10-18.md
  {
  	u32 ctrl;
  	u32 val;
-@@ -1473,7 +1473,14 @@
- 
- 	ctrl1 = val1 & ~YT921X_FDB_IO1_STATUS_M;
- 	ctrl1 |= YT921X_FDB_IO1_STATUS_STATIC;
--	ctrl2 = val2 | YT921X_FDB_IO2_EGR_PORTS(ports_mask);
-+	/* Take over learned entries instead of merging into them; otherwise
-+	 * the learned (possibly stale) port would be left behind as a static
-+	 * entry once we leave
-+	 */
-+	if ((val1 & YT921X_FDB_IO1_STATUS_M) == YT921X_FDB_IO1_STATUS_STATIC)
-+		ctrl2 = val2 | YT921X_FDB_IO2_EGR_PORTS(ports_mask);
-+	else
-+		ctrl2 = YT921X_FDB_IO2_EGR_PORTS(ports_mask);
- 	if (ctrl1 == val1 && ctrl2 == val2)
- 		return 0;
- 
-@@ -1529,6 +1536,16 @@
- 	return res;
+@@ -3166,6 +3166,11 @@ static void yt921x_dsa_port_fast_age(struct dsa_switch *ds, int port)
+ 		dev_err(dev, "%s: %i\n", __func__, res);
  }
  
-+/* The bridge uses VID 0 for VLAN-unaware entries, but VLAN-unaware ports learn
-+ * and look up in YT921X_VID_UNWARE (their PVID), so host entries would never
-+ * match. Translate regardless of vlan_filtering so that add and del always
-+ * agree; VID 0 is never matched in VLAN-aware mode anyway.
-+ */
 +static u16 yt921x_fdb_vid(u16 vid)
 +{
 +	return vid ? vid : YT921X_VID_UNWARE;
@@ -55,7 +34,7 @@ relatorios/be3600_dhcp_5ghz_retomada_2026-10-18.md
  static int
  yt921x_dsa_port_fdb_del(struct dsa_switch *ds, int port,
  			const unsigned char *addr, u16 vid, struct dsa_db db)
-@@ -1537,7 +1554,7 @@
+@@ -3174,7 +3179,7 @@ yt921x_dsa_port_fdb_del(struct dsa_switch *ds, int port,
  	int res;
  
  	mutex_lock(&priv->reg_lock);
@@ -64,7 +43,25 @@ relatorios/be3600_dhcp_5ghz_retomada_2026-10-18.md
  	mutex_unlock(&priv->reg_lock);
  
  	return res;
-@@ -1551,7 +1568,7 @@
+@@ -3188,7 +3193,7 @@ yt921x_dsa_port_fdb_add(struct dsa_switch *ds, int port,
+ 	int res;
+ 
+ 	mutex_lock(&priv->reg_lock);
+-	res = yt921x_fdb_join(priv, addr, vid, BIT(port));
++	res = yt921x_fdb_join(priv, addr, yt921x_fdb_vid(vid), BIT(port));
+ 	mutex_unlock(&priv->reg_lock);
+ 
+ 	return res;
+@@ -3204,7 +3209,7 @@ yt921x_dsa_port_mdb_del(struct dsa_switch *ds, int port,
+ 	int res;
+ 
+ 	mutex_lock(&priv->reg_lock);
+-	res = yt921x_fdb_leave(priv, addr, vid, BIT(port));
++	res = yt921x_fdb_leave(priv, addr, yt921x_fdb_vid(vid), BIT(port));
+ 	mutex_unlock(&priv->reg_lock);
+ 
+ 	return res;
+@@ -3221,7 +3226,7 @@ yt921x_dsa_port_mdb_add(struct dsa_switch *ds, int port,
  	int res;
  
  	mutex_lock(&priv->reg_lock);

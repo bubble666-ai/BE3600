@@ -1,10 +1,10 @@
 # OpenWrt 24.10 for D-Link DIR-BE364K (Wi-Fi 7 BE3600)
 
 Community firmware for the **D-Link DIR-BE364K** dual-band Wi-Fi 7 router.
-A from-scratch mainline OpenWrt port (kernel 6.18 + ath12k + DSA) replacing
+A from-scratch mainline OpenWrt port (kernel 6.18.39 + ath12k + DSA) replacing
 the stock D-Link QSDK firmware. Read **Known Issues** before flashing.
 
-**Current release: v30** (Community Edition v30, target `qualcommbe/ipq53xx`).
+**Current release: v31** (`24.10-SNAPSHOT r27648 (DIR-BE364K Community Edition v31)`, target `qualcommbe/ipq53xx`).
 
 ---
 
@@ -25,30 +25,36 @@ the stock D-Link QSDK firmware. Read **Known Issues** before flashing.
 
 ## Features
 
-* **Dual-boot ready:** the FIT carries `config@openwrt` (alias
-  `config@mi04.1` for stock). With the two-entry U-Boot `bootcmd` below,
-  flashing stock from the vendor recovery page boots stock automatically
-  and flashing the OpenWrt factory image returns to OpenWrt — **no UART
-  needed** either way.
-* **DSA VLAN-unaware FDB-learning fix**
-  (`9991-net-dsa-yt921x-fix-unaware-fdb-host-learning.patch`); LAN1–4
-  switch fully functional.
-* **ubiblock rootfs** (`root=/dev/ubiblock0_1`) — eliminates the historical
-  `EBUSY` sysupgrade failure; `apk update` works (ships `/etc/apk/world`
-  and `/lib/apk/db/triggers` for apk-tools 3.x).
-* **Wi-Fi 7:** 2.4 GHz and 5 GHz EHT40, WPA3-SAE-mixed + PMF. 5 GHz pinned
-  to **ch40 / EHT40** (non-DFS) for deterministic AP+STA coexistence on the
-  single QCN6432 radio.
-* **Status LED:** welcoming animation (red → blue → green → status),
-  internet self-check every 30 s — green = default route, red = none.
-* `wwan` zone with masquerading pre-set for repeater mode; apk feeds for
-  `aarch64_cortex-a53`; LuCI thermal widget (5 zones); default LAN
-  `192.168.8.1`.
+* **Motorcomm YT9215S DSA fixes**
+  (`patches/9991-net-dsa-yt921x-fix-unaware-fdb-host-learning.patch`,
+  `patches/tag_yt921x.c`, `patches/yt921x.c`): enables `DSA_TAG_PROTO_YT921X`,
+  fixes 32-bit register truncation in `yt921x_fdb_add_index_in12()`, and maps
+  VLAN-unaware `vid=0` to `YT921X_VID_UNWARE` (`4095`) via `yt921x_fdb_vid()`
+  for both FDB and MDB operations.
+* **Built-in PassWall 2 + Xray-core** on `/rom` (uses zero `/overlay` space):
+  * `luci-app-passwall2` (`26.11.11-r1`) + `xray-core` (`26.11.9-r1`)
+  * `kmod-nft-tproxy`, `kmod-nft-socket`, `curl`, `unzip`
+  * Pre-installed geo datasets in `/usr/share/v2ray/`:
+    `geoip.dat` (`v2ray-geoip-202611080027-r1`),
+    `geosite.dat` (`v2ray-geosite-20261108011013-r1`), and
+    `iran.dat` (`v2ray-geosite-ir-202610230802-r1`)
+* **ABI-matched 802.11s Wi-Fi Mesh package** (`packages/wpad-mesh-mbedtls-2026.04.02~b004de0b-r1.apk`):
+  compiled directly against the firmware's pinned `hostapd-common` / `libmbedtls` /
+  `libucode` ABI so you can enable 802.11s mesh (`SAE`) without breaking LuCI.
+* **Dual-boot ready:** the FIT carries `config@openwrt` (and `config@mi04.1` alias).
+  With the U-Boot environment below, flashing stock from vendor recovery boots
+  stock automatically and flashing OpenWrt factory returns to OpenWrt without UART.
+* **ubiblock rootfs** (`root=/dev/ubiblock0_1`) — eliminates `EBUSY` sysupgrade
+  failures; `apk` package management works cleanly.
+* **Wi-Fi 7:** 2.4 GHz and 5 GHz EHT40, `sae-mixed` (WPA2/WPA3) + PMF (`ieee80211w=1`).
+  5 GHz defaults to **ch40 / EHT40** (non-DFS).
+* **Status LED & networking:** internet self-check every 30 s, `wwan` firewall
+  zone with masquerading pre-set for repeater mode, default LAN `192.168.8.1`.
 
 ### U-Boot bootargs gotcha (important for manual work)
 
 Kernel UBI accepts **one `ubi.mtd=` per device** — a comma-separated list is
-invalid and kills the boot:
+invalid and breaks boot:
 
 ```
 ubi.mtd=rootfs ubi.mtd=rootfs_1     # correct (two separate parameters)
@@ -76,13 +82,14 @@ saveenv
 
 | File | Purpose |
 |---|---|
-| `firmware/*-v30-squashfs-factory.bin` | Initial install via D-Link Web Recovery (192.168.10.10) |
-| `firmware/*-v30-squashfs-sysupgrade.bin` | Upgrades from LuCI / SSH `sysupgrade` |
-| `firmware/v30_ubi.bin` | Raw UBI image for U-Boot TFTP flashing |
-| `firmware/v30.itb` | RAM-boot image (non-destructive testing) |
-| `tools/auto_flash_v30_uart_tftp.py` | Automated UART + TFTP flasher |
-| `patches/` | Device tree + Motorcomm YT9215 DSA sources (FDB fix included) |
-| `SHA256SUMS` | Checksums for every binary above |
+| `firmware/openwrt-24.10-r27648-qualcommbe-ipq53xx-dlink_dir-be364k-v31-squashfs-factory.bin` | Initial install / recovery via D-Link Web Recovery (`192.168.10.10`) |
+| `firmware/openwrt-24.10-r27648-qualcommbe-ipq53xx-dlink_dir-be364k-v31-squashfs-sysupgrade.bin` | Upgrades from LuCI / SSH `sysupgrade` |
+| `firmware/v31_ubi.bin` | Raw UBI image (`kernel` 6 MiB + `ubi_rootfs` + `rootfs_data`) for U-Boot TFTP |
+| `firmware/v31.itb` | RAM-boot image (non-destructive testing) |
+| `packages/wpad-mesh-mbedtls-2026.04.02~b004de0b-r1.apk` | Optional 802.11s Wi-Fi Mesh (`wpad-mesh-mbedtls`) compiled for v31 ABI |
+| `tools/auto_flash_v31_uart_tftp.py` | Automated UART + TFTP flasher (`--port COMx`) |
+| `patches/` | Device tree + updated Motorcomm YT9215 DSA sources |
+| `SHA256SUMS` | SHA-256 checksums for all firmware binaries and `.apk` packages |
 
 ## Installation
 
@@ -92,92 +99,91 @@ disconnect VPNs on your PC (they intercept local traffic).
 ### Method 1 — Web Recovery (no UART required, recommended)
 1. PC Ethernet → **LAN port 1**. Static IP `192.168.10.20 / 255.255.255.0`,
    gateway `192.168.10.10`.
-2. Power off; hold **Reset** ~5 s while powering on.
+2. Power off; hold **Reset** ~5 s while powering on until recovery mode starts.
 3. Open **http://192.168.10.10** → upload
-   `firmware/*-v30-squashfs-factory.bin` → **Upgrade**.
+   `firmware/openwrt-24.10-r27648-qualcommbe-ipq53xx-dlink_dir-be364k-v31-squashfs-factory.bin`
+   → **Upgrade**.
 4. Wait ~2–3 min. Switch the PC NIC back to DHCP. LuCI: **http://192.168.8.1**.
 
 ### Method 2 — Automated UART + TFTP
-1. UART (GND↔GND, RX↔TX, TX↔RX, 115200 8N1); PC Ethernet → **WAN** port;
+1. UART (`GND↔GND`, `RX↔TX`, `TX↔RX`, `115200 8N1`); PC Ethernet → **WAN** port;
    static IP `192.168.10.20/24`.
-2. `python tools/auto_flash_v30_uart_tftp.py --port COM5`
-   (port auto-detected when omitted). The script starts an internal TFTP
-   server, flashes `rootfs`, and writes the permanent boot environment.
+2. `python tools/auto_flash_v31_uart_tftp.py --port COM3`
+   The script runs an internal TFTP server, flashes `rootfs` and `rootfs_1` with
+   `firmware/v31_ubi.bin`, writes the U-Boot boot environment, and reboots into OpenWrt v31.
 
 ### First boot
-* LuCI `http://192.168.8.1` — no password set; set one immediately.
-* Wi-Fi `DIR-BE364K-2G` / `DIR-BE364K-5G`, mixed WPA2/WPA3, passphrase `12345678`.
+* LuCI: `http://192.168.8.1` — no password set initially; set a root password immediately.
+* Default Wi-Fi SSIDs: `DIR-BE364K-2G` / `DIR-BE364K-5G`, encryption `sae-mixed` (WPA2/WPA3), passphrase `12345678`.
+
+## PassWall 2 + Xray Direct Iran Rules (No Extra Flash Needed)
+
+v31 already includes `geoip.dat`, `geosite.dat`, and `iran.dat` inside `/rom/usr/share/v2ray/`,
+consuming **0 bytes** of `/overlay`:
+
+* `PassWall 2` → **Rule Manage** → edit the `Iran` rule (`config shunt_rules 'Iran'`):
+  * Note: in this version of PassWall 2 (`util_xray.lua`), lines starting with `#`,
+    `rule-set:`, or `ext:` are **ignored** when generating Xray routing JSON. Also,
+    `/usr/share/v2ray/geosite.dat` provides tag `CATEGORY-IR` (not bare `IR`).
+  * Set **Domain** to:
+    ```text
+    geosite:category-ir
+    regexp:.*\.ir$
+    regexp:.*\.xn--mgba3a4f16a$
+    ```
+  * Keep **IP** as:
+    ```text
+    geoip:ir
+    ```
+* **`Geoview` note:** `Geoview` (`/usr/bin/geoview`) is an optional helper binary
+  (for Sing-Box `.srs` conversion or nftables IP preloading), **not** the geo rule
+  database itself. When running **Xray**, you do **not** need `Geoview` installed or updated.
+
+## Installing Wi-Fi Mesh (`wpad-mesh-mbedtls`)
+
+The upstream OpenWrt snapshot feed ships newer `wpad-mesh-*` builds linked against newer
+`hostapd-common` / `ucode` libraries that conflict with v31's pinned userspace. Use the
+prebuilt package in `packages/wpad-mesh-mbedtls-2026.04.02~b004de0b-r1.apk` instead.
+
+Because `/etc/apk/world` pins `wpad-basic-mbedtls=2026.04.02~b004de0b-r1`, swap it in one
+chained command (ideally over Ethernet so Wi-Fi reloads cleanly right after):
+
+1. Upload the package to `/tmp/` on the router (from your PC):
+   ```sh
+   ssh root@192.168.8.1 "cat > /tmp/wpad-mesh-mbedtls-2026.04.02~b004de0b-r1.apk" < packages/wpad-mesh-mbedtls-2026.04.02~b004de0b-r1.apk
+   ```
+2. On the router (SSH as `root`):
+   ```sh
+   apk del --no-network wpad-basic-mbedtls && \
+   apk add --no-network --allow-untrusted /tmp/wpad-mesh-mbedtls-2026.04.02~b004de0b-r1.apk && \
+   rm -f /tmp/wpad-mesh-mbedtls-2026.04.02~b004de0b-r1.apk && \
+   wifi reload
+   ```
+   *(Uses ~1.7 MiB on `/overlay`; tested cleanly with `Supported interface modes: * mesh point`.)*
 
 ## Wi-Fi settings guide (LuCI)
 
-**Change your own SSID / password:** *Network → Wireless* → **Edit** on the
-`DIR-BE364K-2G` or `DIR-BE364K-5G` card → set `SSID`, `Encryption`
-(`WPA2-PSK` for maximum compatibility, `WPA3-SAE mixed` for security),
-`Password` (≥ 8 chars) → **Save → Apply**.
+**Change your own SSID / password:** *Network → Wireless* → **Edit** on
+`DIR-BE364K-2G` or `DIR-BE364K-5G` → set `SSID`, `Encryption`, `Password` → **Save & Apply**.
 
 **Repeater / WISP (join an upstream AP):**
-1. *Network → Wireless* → on the radio you want to use → **Scan**.
-2. Find the upstream SSID → **Join Network**.
-3. Enter the **exact** passphrase (case and symbol order matter), keep
-   network `wwan`, **Save → Apply**.
+1. *Network → Wireless* → on the radio you want to use → **Scan** → **Join Network**.
+2. Enter the passphrase, keep firewall zone `wwan`, **Save & Apply**.
 
-**Channel rules (important):**
-* One radio serves one channel. If the upstream AP sits on channel X, the
-  local AP on the same radio must also use channel X (width ≤ upstream
-  width). The image ships the 5 GHz AP on **channel 40 / EHT40**.
-* Avoid DFS channels (52–144) for the local AP — they impose a 60 s CAC at
-  boot before the SSID appears.
-* For a repeater, prefer the 5 GHz radio when the upstream is 5 GHz; the
-  2.4 GHz radio stays free as a legacy AP.
+**Channel & width rules (important for QCN6432 5 GHz AP+STA):**
+* Both AP and STA interfaces on the same radio must match the **upstream AP's channel and width**
+  (for example, if the upstream 5 GHz router operates on channel 100 at 80 MHz, set
+  `wireless.radio1.htmode='HE80'` — `EHT40` with an 80 MHz DFS upstream can prevent `phy1-sta0`
+  from bringing up traffic cleanly).
+* Avoid DFS channels (52–144) on standalone local APs when you don't need them — DFS imposes a 60 s CAC at boot.
 
-**Status LED:** green = default route present (internet up); red = no
-internet. The state is re-checked at boot, on interface events, and every
-30 s.
+## Storage & `/opt` (42 MB on second NAND slot)
 
-## Optional: larger overlay (extroot)
+In **v31**, the compressed squashfs rootfs (~24 MB with PassWall 2 + Xray + geodata) leaves
+**~14.4 MB** writable `/overlay` (`rootfs_data` on `ubi0_2`).
 
-Default overlay is a `rootfs_data` volume inside the rootfs UBI slot
-(~22-28 MB writable). Two documented options, both tested on hardware:
-
-### A) Simple — grow the slot-1 overlay only
-
-Not possible beyond ~28 MB without repartitioning: the rootfs slot is 52 MB
-(kernel ~6 MB + squashfs ~11 MB + reserve). A future image can shrink the
-kernel volume to 5 MB and hand the rest to `rootfs_data` (~33-35 MB) —
-planned for a later release.
-
-### B) Advanced — second-slot overlay (`data` volume on `rootfs_1`)
-
-1. In U-Boot (one-time, UART), the bootargs **must use two separate
-   parameters** (see gotcha above) and the overlay token:
-   `… ubi.mtd=rootfs ubi.mtd=rootfs_1 ubi.block=0,1 root=/dev/ubiblock0_1 …
-   fstools_overlay_name=data`
-2. On the running router (SSH, as root):
-   ```sh
-   IDX=$(grep '"rootfs_1"' /proc/mtd | sed 's/mtd\([0-9]*\):.*/\1/')
-   ubiattach -m "$IDX"
-   ubirmvol /dev/ubi1 -N kernel 2>/dev/null || true
-   ubirmvol /dev/ubi1 -N ubi_rootfs 2>/dev/null || true
-   ubirmvol /dev/ubi1 -N rootfs_data 2>/dev/null || true
-   ubimkvol /dev/ubi1 -N data -m          # ~47 MB volume
-   ```
-3. The volume must contain a UBIFS filesystem. `mkfs.ubifs` is not shipped in
-   the image; either build an empty image on a PC
-   (`mkfs.ubifs -r emptydir -m 2048 -e 126976 -c 393 -o data.ubifs`) and
-   write it with `ubiupdatevol /dev/ubi1_0 data.ubifs`, or restore a backup
-   of a UBIFS volume over it.
-4. Reboot. `df -h /overlay` then reports the new size.
-
-**Caveats we hit on real hardware:** if slot 1 *also* has a volume named
-`data`, fstools mounts the first match (slot-1, 28 MB). Keep the name unique
-or rely on a clean factory flash. Also note `fstools` does **not** format an
-empty extroot volume — pre-format it as in step 3.
-
-## Extra storage: `/opt` on the second NAND slot (42 MB, SSH-only)
-
-No re-flash, no U-Boot / no env change needed. Requires that both UBI
-devices are attached (the v30 dual-boot `bargs` does this). All you need is
-SSH on the freshly installed system:
+If you need more space for additional datasets/binaries without changing the overlay layout,
+mount the second NAND slot (`rootfs_1`) as a ~42 MB `/opt` volume:
 
 ```sh
 # one-time, as root:
@@ -187,104 +193,65 @@ ubirmvol /dev/ubi1 -N kernel 2>/dev/null || true
 ubirmvol /dev/ubi1 -N ubi_rootfs 2>/dev/null || true
 ubirmvol /dev/ubi1 -N rootfs_data 2>/dev/null || true
 ubimkvol /dev/ubi1 -N bigdata -m          # ~47 MB volume (keep name unique!)
-# make a minimal UBIFS image on your PC and push it:
+# Format an empty UBIFS image on your PC and write it:
 #   mkfs.ubifs -r emptydir -m 2048 -e 126976 -c 393 -o data.ubifs
 #   ssh root@192.168.8.1 "cat > /tmp/data.ubifs" < data.ubifs
 #   ssh root@192.168.8.1 "ubiupdatevol /dev/ubi1_0 /tmp/data.ubifs"
 mkdir -p /opt
 mount -t ubifs /dev/ubi1_0 /opt
-df -h /opt        # ~42 MB free
+df -h /opt
 ```
-
-Persist it with `/etc/init.d/opt` (`START=97`, `boot()` runs
-`ubiattach -m 19` + mount) and add `/opt/bin` to `PATH` in `/etc/profile`.
-This gives ~42 MB of persistent space next to the ~27 MB overlay — useful
-for large binaries/datasets (Xray, sing-box, scripts), while `apk` packages
-themselves still install to `/usr` on the overlay.
-
-**`optify` helper (the "tie both spaces together" trick):** a tiny script
-at `/opt/bin/optify` relocates any directory's contents onto the 42 MB
-volume and leaves a symlink behind, so both spaces act as one pool:
-
-```sh
-optify /usr/share/xray-core      # moves contents to /opt/share_usr_share_xray-core
-optify /root/.cache
-```
-
-It refuses system roots, merges on re-run (after apk upgrades recreate the
-dir, just run it again), and prints both `df` sizes afterwards.
-
 
 ## ⚠️ Package compatibility warning (read before `apk add`)
 
-This image is assembled from a **pinned userspace** (snapshot r27648 rootfs)
-on a custom kernel. Installing packages that replace *core* components pulls
-newer snapshot dependencies and will break the system (observed in the field:
-`wpad-mesh-*` replaced `wpad-basic-mbedtls` + `libucode` + `/usr/libexec/*`
-and killed LuCI and console login):
+This image uses a **pinned userspace** (`24.10-SNAPSHOT r27648`) with a custom `6.18.39` kernel:
 
-* **Do not install/upgrade:** `wpad-*`, `hostapd*`, `ucode*`, `libucode*`,
-  `luci*`, `libc`, `libubox*`, `libubus*`, `netifd*`, `base-files` — i.e.
-  anything from the snapshot feeds that overrides a shipped core file.
-* **Safe:** pure-leaf packages that only add their own files (`htop`, `nano`,
-  `curl`, `tcpdump`, `python3-*`, `xray-core`, `sing-box`, …) as long as
-  `apk` does not offer `lib*` upgrades — if it does, stop.
-* **Recovery if it happens anyway:** boot U-Boot with `init=/bin/sh`, mount
-  `ubi0_2` and delete the offending files from `upper/` (they shadow the ROM
-  copies; system returns to its shipped state).
-
-**Roadmap (v31):** rebuild as a proper image from the OpenWrt ImageBuilder
-with a matching feed snapshot so `apk` upgrades stay compatible.
+* **Do not upgrade core packages from online snapshot feeds:** `wpad-*`, `hostapd*`,
+  `ucode*`, `libucode*`, `luci*`, `libc`, `libubox*`, `libubus*`, `netifd*`, `base-files`,
+  or kernel modules (`kmod-*`). Always verify `apk add --simulate <pkg>` first.
+* **Safe:** pure-leaf packages that do not pull core `lib*` upgrades (for example `mesh11sd`,
+  `htop`, `nano`), and custom ABI-matched packages from `packages/`.
+* **Recovery if `/overlay` is broken:** boot U-Boot with `init=/bin/sh`, mount `ubi0_2`, and
+  remove offending files under `upper/`.
 
 ## Upgrades
 
-LuCI → *System → Backup / Flash Firmware* → upload `*sysupgrade.bin` →
-*(Keep settings recommended; the extroot overlay survives either way)* →
-**Proceed**. Upgrading from any v26+ image is safe: root is mounted from
-`ubiblock0_1`, so the running rootfs volume is never locked during the
-upgrade. The router reboots automatically; allow up to ~8 minutes
-(upload → flash → boot) before touching anything.
+LuCI → *System → Backup / Flash Firmware* → upload
+`firmware/openwrt-24.10-r27648-qualcommbe-ipq53xx-dlink_dir-be364k-v31-squashfs-sysupgrade.bin`
+→ **Proceed**. Allow up to ~8 minutes before unplugging power.
 
 ## Unbricking
 
-Bootloaders (SBL1 / MIBIB / QSEE / APPSBL) are never touched by these
-images, so recovery is always available.
-1. Hold Reset 5 s at power-on → **http://192.168.10.10** → flash factory
-   image (or official D-Link firmware).
-2. If the router seems dead after a **software reboot**, pull the power cord
-   for 10 s and re-plug (known Qualcomm warm-reboot lockup on this platform).
-3. UART route: at `IPQ5332#`: `tftpboot 0x44000000 v30_ubi.bin` →
-   `flash rootfs 0x44000000 <exact size of v30_ubi.bin>` → set `bargs`
-   (text above without the overlay token), `loadk`, `bootk`, `bootcmd`,
-   `saveenv`, `reset`.
+Bootloaders (`SBL1` / `MIBIB` / `QSEE` / `APPSBL`) are never modified by these images:
+1. Hold Reset ~5 s at power-on → **http://192.168.10.10** → flash `*-squashfs-factory.bin`
+   (or official D-Link firmware).
+2. After a software reboot, if the router appears stuck, power-cycle for 10 s (known
+   IPQ5332 warm-reboot behavior).
+3. UART recovery: use `tools/auto_flash_v31_uart_tftp.py` or `tftpboot 0x44000000 v31_ubi.bin` +
+   `flash rootfs 0x44000000 <exact hex size>`.
 
 ## Known issues / limitations
 
-* **Some LAN jacks report DHCP but cannot reach LuCI/SSH** — a client on an
-  affected jack obtains an IP (broadcast works) but unicast to the router is
-  dropped on that switch port. Under investigation (yt921x per-port
-  unicast-to-CPU path). Workaround: use LAN1/LAN2 until fixed.
-* **5 GHz AP + STA share one radio** (QCN6432): both must stay on the same
-  channel and width; the image pins ch40/EHT40 for this reason.
-* **No hardware flow offload** (no NSS/PPE tc-offload in mainline); software
-  flow offloading is enabled.
-* **Wi-Fi 7 requires WPA3-SAE(mixed)+PMF** on the AP side; clients without
-  PMF fall back to Wi-Fi 6 by design.
-* On 160 MHz AP operation, background scans are inhibited by DFS rules —
-  `iw scan` returning `EBUSY` at 160 MHz is expected behavior, not a bug.
+* **Some LAN jacks report DHCP but cannot reach LuCI/SSH** — under investigation on `yt921x`;
+  v31 includes the updated `DSA_TAG_PROTO_YT921X` and 32-bit FDB/MDB fixes (`patches/`). If an
+  individual port shows issues in your topology, test on LAN1/LAN2.
+* **5 GHz AP + STA share one radio** (`QCN6432`): both interfaces must share the same channel
+  and compatible width (`htmode`).
+* **No hardware flow offload** (no NSS/PPE tc-offload in mainline); software flow offloading is available.
+* **Wi-Fi 7 requires WPA3-SAE(mixed)+PMF** on the AP side; legacy clients without PMF fall back cleanly.
+* On 160 MHz AP operation, DFS rules may cause `iw scan` to return `EBUSY`.
 
 ## Versioning
 
-Releases use simple sequential tags (`v30`) mapped to
-`openwrt-24.10-r27648-…-v30-*` file names; the userspace version string
-inside the image is `24.10-SNAPSHOT r27648 (DIR-BE364K Community Edition v30)`.
+Releases use sequential tags (`v30`, `v31`, …) mapped to `openwrt-24.10-r27648-…-v<N>-*` filenames;
+the userspace release string inside this build is `OpenWrt 24.10-SNAPSHOT r27648 (DIR-BE364K Community Edition v31)`.
 
 ## Credits / License
 
 * OpenWrt Project — https://openwrt.org
-* Motorcomm YT9215 DSA driver — David Yang (`mmyangfl`) and upstream DSA
-  maintainers; FDB-learning fix from the RD15/BE3600 community port.
-* Device tree, packaging and testing: DIR-BE364K community.
+* PassWall 2 & Xray-core projects
+* Motorcomm YT9215 DSA driver — David Yang (`mmyangfl`) and upstream DSA contributors
+* Device tree, packaging and testing: DIR-BE364K community
 * **License: GPL-2.0-only** (see `LICENSE`). This project is a derivative
   work of OpenWrt and the Linux kernel; all build scripts, device-tree
   sources and patches in this repository are released under the same terms.

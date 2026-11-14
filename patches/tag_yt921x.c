@@ -165,7 +165,7 @@ yt921x_tag_rcv(struct sk_buff *skb, struct net_device *netdev)
 
 static const struct dsa_device_ops yt921x_netdev_ops = {
 	.name	= YT921X_TAG_NAME,
-	.proto	= DSA_TAG_PROTO_NONE,
+	.proto	= DSA_TAG_PROTO_YT921X,
 	.xmit	= yt921x_tag_xmit,
 	.rcv	= yt921x_tag_rcv,
 	.needed_headroom = YT921X_TAG_LEN,
@@ -173,6 +173,6 @@ static const struct dsa_device_ops yt921x_netdev_ops = {
 
 MODULE_DESCRIPTION("DSA tag driver for Motorcomm YT921x switches");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS_DSA_TAG_DRIVER(DSA_TAG_PROTO_NONE, YT921X_TAG_NAME);
+MODULE_ALIAS_DSA_TAG_DRIVER(DSA_TAG_PROTO_YT921X, YT921X_TAG_NAME);
 
 module_dsa_tag_driver(yt921x_netdev_ops);

@@ -3210,7 +3210,7 @@ yt921x_dsa_port_mdb_del(struct dsa_switch *ds, int port,
 	int res;
 
 	mutex_lock(&priv->reg_lock);
-	res = yt921x_fdb_leave(priv, addr, vid, BIT(port));
+	res = yt921x_fdb_leave(priv, addr, yt921x_fdb_vid(vid), BIT(port));
 	mutex_unlock(&priv->reg_lock);
 
 	return res;
@@ -3227,7 +3227,7 @@ yt921x_dsa_port_mdb_add(struct dsa_switch *ds, int port,
 	int res;
 
 	mutex_lock(&priv->reg_lock);
-	res = yt921x_fdb_join(priv, addr, vid, BIT(port));
+	res = yt921x_fdb_join(priv, addr, yt921x_fdb_vid(vid), BIT(port));
 	mutex_unlock(&priv->reg_lock);
 
 	return res;
@@ -4325,7 +4325,7 @@ static enum dsa_tag_protocol
 yt921x_dsa_get_tag_protocol(struct dsa_switch *ds, int port,
 			    enum dsa_tag_protocol m)
 {
-	return DSA_TAG_PROTO_NONE;
+	return DSA_TAG_PROTO_YT921X;
 }
 
 static int yt921x_dsa_port_setup(struct dsa_switch *ds, int port)

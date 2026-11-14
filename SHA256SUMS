@@ -1,4 +1,5 @@
-8f5a70a58492e6b8d43277b422a65ff9c0e943485e779b32c99cb43192adddc1 *firmware/openwrt-24.10-r27648-qualcommbe-ipq53xx-dlink_dir-be364k-v30-squashfs-factory.bin
-9d51600f4f315a8ac102634ac99b5e0c514353f3bedb013d86287a684d299afe *firmware/openwrt-24.10-r27648-qualcommbe-ipq53xx-dlink_dir-be364k-v30-squashfs-sysupgrade.bin
-90ec5fde9d76a92b90c9c791928c1d10c30d4290add09ab822618014c0ef3c19 *firmware/v30.itb
-c75546f3403894746e3e744f71ad0a9f13dc19ac82cd98aa7f316bbf810635dc *firmware/v30_ubi.bin
+bd51ccec3dc5d740bf4b2d68cede31809ac655c532ad87c50e6e4437cfb76a34 *firmware/openwrt-24.10-r27648-qualcommbe-ipq53xx-dlink_dir-be364k-v31-squashfs-factory.bin
+5a8fc29b76911532f78e2986ffa3dad91e5fdc1e8f785abcd9dcf2d5b67264b1 *firmware/openwrt-24.10-r27648-qualcommbe-ipq53xx-dlink_dir-be364k-v31-squashfs-sysupgrade.bin
+2812ff7555ec30872c484406979bf2c2d044661bc7a35ee7cfe139933d873a69 *firmware/v31.itb
+3ca220e4315141ecd29e706f01cd450d538cc5f605f325f902df8075cd811605 *firmware/v31_ubi.bin
+f80a4232c9e34a73d50c7ce3d041c08c27ce3d4a204d37b8ec41fedbccb30603 *packages/wpad-mesh-mbedtls-2026.04.02~b004de0b-r1.apk
